@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -x
 # nome do arquivo
 
 # le o conteudo do arquivo de entrada
