@@ -1,7 +1,7 @@
 #!/bin/bash
-set -x
-# nome do arquivo
 
+# nome do arquivo
+file=$FILE
 # le o conteudo do arquivo de entrada
 while read line; do
 
@@ -27,7 +27,7 @@ while read line; do
             # extrai os 71 primeiros caracteres da linha
             line_part="${line:0:71}"
             # grava no arquivo de saida
-            echo "$line_part" >> $1.new
+            echo "$line_part" >> $file.new
             # reinicia a linha remove o trecho já gravado e adiciona novamente o contador
             line=" ${line:71}"
             # atualiza o contador
@@ -35,7 +35,7 @@ while read line; do
         done
     } || {
         # Se possuir menos de 71 caracteres
-        echo "$line" >> $1.new
+        echo "$line" >> $file.new
     }
 
-done < $1
+done < $file
