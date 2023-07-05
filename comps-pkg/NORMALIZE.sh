@@ -23,7 +23,7 @@ while read line; do
         cnt=1
 
         # percorre o número de linhas necessárias
-        for (( li = 0; li < "$nlines"; li++ )); do
+        for (( i = 0; i < "$nlines"; i++ )); do
             # extrai os 71 primeiros caracteres da linha
             line_part="${line:0:71}"
             # grava no arquivo de saida
