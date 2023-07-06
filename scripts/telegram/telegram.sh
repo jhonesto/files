@@ -1,6 +1,6 @@
 
 #! /bin/sh
 
-cd /home/jhonesto/Telegram
+cd /opt/Telegram
 
 ./Telegram &
