@@ -22,6 +22,10 @@ new_digest="$(md5sum $arquivoOrig | cut	-d ' ' -f 1)"
 
 if [ "$old_digest" != "$new_digest" ] 
 then
-  echo "O $arquivo foi alterado, substituindo pelo $arquivoOrig" > /dev/kmsg
-  cp "$arquivoOrig" "$arquivo"
+  if cp $arquivoOrig $arquivo
+  then
+    echo "<6>info: O $arquivo foi substituindo pelo $arquivoOrig." > /dev/kmsg
+  else
+    echo "<4>warn: Erro ao substituir o arquivo $arquivo pelo $arquivoOrig." > /dev/kmsg
+  fi
 fi
