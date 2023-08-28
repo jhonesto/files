@@ -5,7 +5,7 @@ cd ~/springtools
 
 export GTK_IM_MODULE="ibus"
 
-export JAVA_HOME=$(dirname $(dirname $(readlink $(readlink $(which javac)))))
+export JAVA_HOME=$(dirname $(dirname $(readlink -f $(readlink -f $(which javac)))))
 
 export PATH=$PATH:$JAVA_HOME/bin
 
