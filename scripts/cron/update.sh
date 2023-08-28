@@ -2,7 +2,7 @@
 
 if dnf update -y
 then
-	CWD=$PWD
-	exec $CWD/checksum.sh /usr/share/applications/brave-browser.desktop /root/brave-browser.desktop 
-    exec $CWD/checksum.sh /usr/share/applications/chromium-browser.desktop /root/chromium-browser.desktop
+    CWD=/root/prod
+	exec $CWD/cron/checksum.sh /usr/share/applications/brave-browser.desktop $CWD/brave-browser.desktop
+    exec $CWD/cron/checksum.sh /usr/share/applications/chromium-browser.desktop $CWD/chromium-browser.desktop
 fi
