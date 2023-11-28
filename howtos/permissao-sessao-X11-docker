@@ -1,0 +1,12 @@
+para ver o DISPLAY
+
+$ env |grep DISPLAY
+DISPLAY=:0.0
+
+se não tiver o DISPLAY exportar a configuração
+
+export DISPLAY=:0.0
+
+permissão para acessar a sessão do X11 
+
+sudo xhost +si:localuser:root
