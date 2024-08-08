@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 arquivo=/etc/resolv.conf
 arquivoOrig=/root/prod/resolv.conf

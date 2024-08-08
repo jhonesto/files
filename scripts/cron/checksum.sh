@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 arquivo=${1:-/dev/null}
 arquivoOrig=${2:-/dev/null}
