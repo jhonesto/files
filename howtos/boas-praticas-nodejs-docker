@@ -1,0 +1,1041 @@
+   #[1]Medium [2]alternate
+
+   [3]Open in app
+
+   (BUTTON) Sign up
+
+   [4]Sign in
+   ____________________
+   Write
+
+   (BUTTON) Sign up
+
+   [5]Sign in
+   (BUTTON)
+
+10 melhores práticas para aplicações Node.js em containers com Docker
+
+   Eduardo Rabelo
+
+   [6]Eduardo Rabelo
+   ·
+
+   [7]Follow
+   22 min read
+   ·
+   Jan 15, 2021
+
+   --
+   (BUTTON)
+   (BUTTON)
+
+   Share
+
+   Você está procurando as melhores práticas sobre como construir imagens
+   Docker Node.js para seus aplicativos? Então você veio ao lugar certo!
+
+   O artigo a seguir fornece diretrizes de nível de produção para a
+   construção de imagens Docker Node.js otimizadas e seguras. Você achará
+   dicas úteis, independentemente do aplicativo Node.js que pretende
+   construir. Este artigo será útil para você se:
+     * Seu objetivo é construir um aplicativo de front-end usando recursos
+       de Node.js para renderização do lado do servidor (SSR) em React.
+     * Você está procurando conselhos sobre como construir corretamente
+       uma imagem Docker Node.js para seus micros-serviços, executando
+       Fastify, NestJS ou outros frameworks.
+
+   Por que resolvi escrevi este guia sobre a criação de contêineres de
+   aplicativos web em Docker Node.js?
+
+   Pode parecer "ainda mais um artigo sobre" como construir imagens Docker
+   para aplicativos Node.js, mas muitos exemplos que vimos em blogs são
+   muito simplistas e têm como objetivo apenas orientá-lo no básico de ter
+   uma imagem Docker Node.js executando um aplicativo , sem consideração
+   cuidadosa de segurança e práticas recomendadas para construir imagens
+   Docker do Node.js.
+
+   Vamos aprender como colocar em um contêiner os aplicativos Node.js,
+   passo a passo, começando com um Dockerfile simples e funcional,
+   entendendo as armadilhas e inseguranças de cada diretiva do Dockerfile
+   e, em seguida, corrigindo-o.
+
+   [8]Clique aqui para ver o cheatsheet.
+
+Uma compilação de imagem Docker Node.js simples
+
+   A maioria dos artigos de blog que vimos começa e termina nas linhas das
+   seguintes instruções básicas do Dockerfile para a construção de imagens
+   Node.js do Docker:
+FROM node
+WORKDIR /usr/src/app
+COPY . /usr/src/app
+RUN npm install
+CMD "npm" "start"
+
+   Copie-o para um arquivo denominado Dockerfile e execute-o.
+$ docker build . -t nodejs-tutorial
+$ docker run -p 3000:3000 nodejs-tutorial
+
+   É simples e funciona.
+
+   O único problema? Ele está cheio de erros e práticas inadequadas para a
+   construção de imagens Docker do Node.js. Evite o exemplo acima de todas
+   as maneiras.
+
+   Vamos começar a melhorar este Dockerfile para que possamos construir
+   aplicativos Node.js otimizados com o Docker.
+
+   Você pode acompanhar este tutorial clonando [9]este repositório.
+
+1. Use tags explícitas e determinísticas de imagem base do Docker
+
+   Pode parecer uma escolha óbvia para construir sua imagem com base na
+   imagem node do Docker, mas o que você realmente está puxando quando
+   constrói a imagem? As imagens do Docker são sempre referenciadas por
+   tags e, quando você não especifica uma tag como padrão, a :latest tag é
+   usada.
+
+   Portanto, ao especificar o seguinte em seu Dockerfile, você sempre
+   constrói a versão mais recente da imagem Docker que foi enviada pelo
+   grupo de trabalho Docker Node.js:
+FROM node
+
+   As deficiências da construção com base na imagem node padrão são as
+   seguintes:
+    1. As compilações de imagens do Docker são inconsistentes. Assim como
+       estamos usando lockfiles para obter um comportamento do npm install
+       determinístico toda vez que instalamos pacotes npm, também
+       gostaríamos de obter compilações de imagens docker determinísticas.
+       Se construirmos a imagem FROM node - o que efetivamente significa a
+       tag node:latest - então cada construção puxará uma imagem Docker
+       recém-construída do node. Não queremos introduzir esse tipo de
+       comportamento não determinístico.
+    2. A imagem node do Docker é baseada em um sistema operacional
+       completo, cheio de bibliotecas e ferramentas que você pode ou não
+       precisar para executar seu aplicativo Node.js. Isso tem duas
+       desvantagens. Em primeiro lugar, uma imagem maior significa um
+       tamanho de download maior que, além de aumentar a necessidade de
+       armazenamento, significa mais tempo para baixar e reconstruir a
+       imagem. Em segundo lugar, significa que você está potencialmente
+       introduzindo vulnerabilidades de segurança, que podem existir em
+       todas essas bibliotecas e ferramentas, na imagem.
+
+   Na verdade, a imagem node do Docker é bastante grande e inclui centenas
+   de vulnerabilidades de segurança de diferentes tipos e severidades. Se
+   você estiver usando, então, por padrão, seu ponto de partida será uma
+   linha de base de 642 vulnerabilidades de segurança e centenas de
+   megabytes de dados de imagem baixados em cada pull e build.
+
+   As recomendações para construir melhores imagens do Docker são:
+    1. Use imagens pequenas do Docker -- isso resultará em uma imagem de
+       software menor do Docker, reduzindo os vetores de vulnerabilidade
+       em potencial, e com um tamanho menor, irá acelerar o processo de
+       construção da imagem.
+    2. Use digests de imagem do Docker, que é o hash SHA256 estático da
+       imagem. Isso garante que você esteja obtendo compilações de imagem
+       Docker determinísticas a partir da imagem base.
+
+   Com base nisso, vamos garantir que usamos a versão Long Term Support
+   (LTS) do Node.js e o alpine, que é o tipo mínimo de imagem para ter o
+   menor tamanho e uma imagem de software menor:
+FROM node:lts-alpine
+
+   No entanto, esta diretiva de imagem de base ainda puxará novas
+   compilações dessa tag. Podemos encontrar o hash SHA256 para ele no
+   [10]Docker Hub da tag Node.js , ou executando o seguinte comando e
+   localizando o Digest no print de saída:
+$ docker pull node:lts-alpine
+lts-alpine: Pulling from library/node
+0a6724ff3fcd: Already exists
+9383f33fa9f3: Already exists
+b6ae88d676fe: Already exists
+565e01e00588: Already exists
+Digest: sha256:b2da3316acdc2bec442190a1fe10dc094e7ba4121d029cb32075ff59bb27390a
+Status: Downloaded newer image for node:lts-alpine
+docker.io/library/node:lts-alpine
+
+   Outra maneira de encontrar o hash SHA256 é executando o seguinte
+   comando:
+$ docker images --digests
+REPOSITORY                     TAG              DIGEST
+                                          IMAGE ID       CREATED             SIZ
+E
+node                           lts-alpine       sha256:b2da3316acdc2bec442190a1f
+e10dc094e7ba4121d029cb32075ff59bb27390a   51d926a5599d   2 weeks ago         116
+MB
+
+   Agora podemos atualizar o Dockerfile para esta imagem Docker Node.js da
+   seguinte maneira:
+FROM node@sha256:b2da3316acdc2bec442190a1fe10dc094e7ba4121d029cb32075ff59bb27390
+a
+WORKDIR /usr/src/app
+COPY . /usr/src/app
+RUN npm install
+CMD "npm" "start"
+
+   No entanto, o Dockerfile acima especifica apenas o nome da imagem
+   Node.js Docker sem uma tag de imagem, o que cria ambigüidade para qual
+   tag de imagem exata está sendo usada -- não é legível, é difícil de
+   manter e não cria uma boa experiência de desenvolvedor.
+
+   Vamos corrigir isso atualizando o Dockerfile, fornecendo a tag de
+   imagem de base completa para a versão Node.js que corresponde a esse
+   hash SHA256:
+FROM node:lts-alpine@sha256:b2da3316acdc2bec442190a1fe10dc094e7ba4121d029cb32075
+ff59bb27390a
+WORKDIR /usr/src/app
+COPY . /usr/src/app
+RUN npm install
+CMD "npm" "start"
+
+2. Instale apenas dependências de produção na imagem Docker Node.js
+
+   A seguinte diretiva do Dockerfile instala todas as dependências no
+   contêiner, incluindo as devDependencies que não são necessárias para
+   que um aplicativo em diretriz de produção funcione. Ele adiciona um
+   risco de segurança desnecessário de pacotes usados como dependências de
+   desenvolvimento, além de aumentar o tamanho da imagem
+   desnecessariamente.
+RUN npm install
+
+   Se você seguiu meu guia anterior sobre [11]as 10 melhores práticas de
+   segurança com npm, então sabe que podemos impor compilações
+   determinísticas com npm ci. Isso evita surpresas em um fluxo de
+   integração contínua (CI) porque ele é interrompido se qualquer desvio
+   do lockfile acontecer.
+
+   No caso da construção de uma imagem Docker para produção, queremos
+   garantir que instalaremos apenas dependências de produção de maneira
+   determinística, e isso nos leva à seguinte prática recomendada para
+   instalar dependências npm em uma imagem de contêiner:
+RUN npm ci --only=production
+
+   O conteúdo atualizado do Dockerfile neste estágio é o seguinte:
+FROM node:lts-alpine@sha256:b2da3316acdc2bec442190a1fe10dc094e7ba4121d029cb32075
+ff59bb27390a
+WORKDIR /usr/src/app
+COPY . /usr/src/app
+RUN npm ci --only=production
+CMD "npm" "start"
+
+3. Otimize as ferramentas do Node.js para produção
+
+   Ao construir sua imagem Docker Node.js para produção, você deseja
+   garantir que todas as estruturas e bibliotecas estejam usando as
+   configurações ideais para desempenho e segurança.
+
+   Isso nos leva a adicionar a seguinte diretiva Dockerfile:
+ENV NODE_ENV production
+
+   À primeira vista, isso parece redundante, uma vez que já especificamos
+   apenas dependências de produção na fase de npm install - então, por que
+   isso é necessário?
+
+   Os desenvolvedores geralmente associam a configuração
+   NODE_ENV=production como variável de ambiente na instalação de
+   dependências relacionadas à produção, no entanto, essa configuração
+   também tem outros efeitos dos quais precisamos estar cientes.
+
+   Algumas estruturas e bibliotecas só podem ativar a configuração
+   otimizada adequada para produção se essa variável de ambiente NODE_ENV
+   for definida como production. Deixando de lado nossa opinião sobre se
+   esta é uma prática boa ou má para os frameworks, é importante saber
+   disso.
+
+   Como exemplo, a [12]documentação do Express descreve a importância de
+   definir esta variável de ambiente para permitir o desempenho e
+   otimizações relacionadas à segurança:
+
+   O impacto do desempenho da variável NODE_ENV pode ser muito
+   significativo.
+
+   O pessoal da Dynatrace publicou uma postagem de blog que detalha os
+   [13]efeitos drásticos da omissão de NODE_ENV em seus aplicativos
+   Express .
+
+   Muitas outras bibliotecas nas quais você depende também podem esperar
+   que essa variável seja definida, portanto, devemos definir isso em
+   nosso Dockerfile.
+
+   O Dockerfile atualizado agora deve ser lido da seguinte maneira com a
+   configuração da variável de ambiente NODE_ENV incluída:
+FROM node:lts-alpine@sha256:b2da3316acdc2bec442190a1fe10dc094e7ba4121d029cb32075
+ff59bb27390a
+ENV NODE_ENV production
+WORKDIR /usr/src/app
+COPY . /usr/src/app
+RUN npm ci --only=production
+CMD "npm" "start"
+
+4. Não execute contêineres como root
+
+   O princípio do menor privilégio é um controle de segurança de longa
+   data desde os primeiros dias do Unix e devemos sempre seguir isso
+   quando estivermos executando nossos aplicativos Node.js em contêiner.
+
+   A avaliação da ameaça é bastante direta -- se um invasor for capaz de
+   comprometer o aplicativo de uma forma que permita a [14]injeção de
+   comandos ou a [15]travessia do caminho do diretório , eles serão
+   invocados com o usuário que está rodando o processo do aplicativo. Se
+   esse processo for root, eles podem fazer praticamente tudo dentro do
+   contêiner, incluindo [16]tentar escapar do contêiner ou [17]aumentar o
+   privilégio . Por que queremos arriscar? Você está certo, nós não
+   queremos!
+
+   Repita comigo: "amigos não deixam amigos rodarem containers como root!"
+
+   A imagem oficial node no Docker, bem como as suas variantes como
+   alpine, inclui um usuário com menos privilégios com o mesmo nome: node.
+   No entanto, não é suficiente apenas executar o processo como node. Por
+   exemplo, o seguinte pode não ser ideal para um aplicativo funcionar
+   bem:
+USER node
+CMD "npm" "start"
+
+   A razão para isso é que a diretiva USER no Dockerfile apenas garante
+   que o processo seja propriedade do usuário node. E quanto a todos os
+   arquivos que copiamos anteriormente com a instrução COPY? Eles são
+   propriedade do root. É assim que o Docker funciona por padrão.
+
+   A maneira completa e adequada de descartar privilégios é a seguinte,
+   mostrando também nossas práticas atualizadas do Dockerfile até este
+   ponto:
+FROM node:lts-alpine@sha256:b2da3316acdc2bec442190a1fe10dc094e7ba4121d029cb32075
+ff59bb27390a
+ENV NODE_ENV production
+WORKDIR /usr/src/app
+COPY --chown=node:node . /usr/src/app
+RUN npm ci --only=production
+USER node
+CMD "npm" "start"
+
+5. Manipule eventos de maneira adequada para encerrar com segurança um
+aplicativo Docker Node.js
+
+   Um dos erros mais comuns que vejo em blogs e artigos sobre a criação de
+   contêineres de aplicativos Node.js, e durante a execução em contêineres
+   Docker, é a maneira como eles invocam o processo. Todos os itens a
+   seguir e suas variantes são padrões ruins que você deve evitar:
+     * CMD "npm" "start"
+     * CMD ["yarn", "start"]
+     * CMD "node" "server.js"
+     * CMD "start-app.sh"
+
+   Vamos mais a fundo! Vou explicar as diferenças entre eles e por que são
+   todos padrões a serem evitados.
+
+   As seguintes preocupações são fundamentais para entender o contexto
+   para executar e encerrar adequadamente os aplicativos Docker do
+   Node.js.
+    1. Um mecanismo de orquestração, como Docker Swarm, Kubernetes ou
+       mesmo apenas o próprio mecanismo Docker, precisa de uma maneira de
+       enviar sinais para o processo no contêiner. Na maioria das vezes,
+       são sinais para encerrar um aplicativo, como SIGTERM e SIGKILL.
+    2. O processo pode ser executado indiretamente e, se isso acontecer,
+       nem sempre é garantido que receberá esses sinais.
+    3. O kernel do Linux trata os processos executados como processos ID 1
+       (PID) de maneira diferente de qualquer outro ID de processo.
+
+   Equipado com esse conhecimento, vamos começar a investigar as maneiras
+   de invocar o processo para um contêiner, começando com o exemplo do
+   Dockerfile que estamos construindo:
+CMD "npm" "start"
+
+   A advertência aqui é dupla. Em primeiro lugar, estamos indiretamente
+   executando a aplicação node, invocando diretamente o cliente npm. Quem
+   pode dizer que o npm CLI encaminha todos os eventos para o tempo de
+   execução do node? Na verdade não funciona, e podemos testar isso
+   facilmente.
+
+   Certifique-se de que em seu aplicativo Node.js você defina um
+   manipulador de eventos para o sinal SIGHUP que registra no console toda
+   vez que você envia um evento. Um exemplo de código simples deve ser o
+   seguinte:
+function handle(signal) {
+   console.log(`*^!@4=> Received event: ${signal}`)
+}
+process.on('SIGHUP', handle)
+
+   Em seguida, execute o contêiner e, quando estiver ativado, envie
+   especificamente o sinal SIGHUP usando a docker CLI e a linha de comando
+   especial --signal:
+$ docker kill --signal=SIGHUP elastic_archimedes
+
+   Não aconteceu nada, certo? Isso ocorre porque o cliente npm não
+   encaminha nenhum sinal para o processo do node que ele gerou.
+
+   A outra ressalva tem a ver com as diferentes maneiras pelas quais você
+   pode especificar a diretiva CMD no Dockerfile. Existem duas maneiras, e
+   elas não são a mesma:
+    1. a notação shellform, na qual o contêiner gera um interpretador de
+       shell que envolve o processo. Nesses casos, o shell pode não
+       encaminhar corretamente os sinais para o seu processo.
+    2. a notação execform, que gera diretamente um processo sem envolvê-lo
+       em um shell. Ele é especificado usando a notação matriz JSON, tais
+       como: CMD ["npm", "start"]. Quaisquer sinais enviados para o
+       contêiner são enviados diretamente para o processo.
+
+   Com base nesse conhecimento, queremos melhorar nossa diretiva de
+   execução de processo Dockerfile da seguinte maneira:
+CMD ["node", "server.js"]
+
+   Agora estamos invocando o processo do node diretamente, garantindo que
+   ele receba todos os sinais enviados a ele, sem ser envolvido em um
+   interpretador de shell.
+
+   No entanto, isso introduz outra armadilha.
+
+   Quando os processos são executados como PID 1, eles efetivamente
+   assumem algumas das responsabilidades de um sistema init, que
+   normalmente é responsável por inicializar um sistema operacional e
+   processos. O kernel trata o PID 1 de uma maneira diferente do que trata
+   outros identificadores de processo. Este tratamento especial do kernel
+   significa que o tratamento de um sinal SIGTERM para um processo em
+   execução não invocará um comportamento de fallback padrão de matar o
+   processo se o processo ainda não tiver configurado um tratador para
+   ele.
+
+   Para [18]citar a recomendação do grupo de trabalho do Docker do Node.js
+   sobre isso: "O Node.js não foi projetado para ser executado como PID 1,
+   o que leva a um comportamento inesperado ao ser executado dentro do
+   Docker. Por exemplo, um processo Node.js rodando como PID 1 não
+   responderá ao SIGINT (CTRL-C) e sinais semelhantes".
+
+   A maneira de fazer isso é usar uma ferramenta que agirá como um
+   processo de inicialização, sendo invocada com PID 1 e, em seguida, gera
+   nosso aplicativo Node.js como outro processo, garantindo que todos os
+   sinais sejam enviados por proxy para esse processo Node.js. Se
+   possível, gostaríamos de usar o menor espaço possível e ferramentas
+   para não correr o risco de ter vulnerabilidades de segurança
+   adicionadas à imagem do contêiner.
+
+   Uma dessas ferramentas que usamos no Snyk é o [19]dumb-init,, porque
+   está estaticamente vinculada e ocupa um espaço pequeno. Veja como vamos
+   configurar:
+RUN apk add dumb-init
+CMD ["dumb-init", "node", "server.js"]
+
+   Isso nos leva ao seguinte Dockerfile atualizado. Você notará que
+   colocamos a dumb-init instalação do pacote logo após a declaração da
+   imagem, para que possamos aproveitar as vantagens do cache de camadas
+   do Docker:
+FROM node:lts-alpine@sha256:b2da3316acdc2bec442190a1fe10dc094e7ba4121d029cb32075
+ff59bb27390a
+RUN apk add dumb-init
+ENV NODE_ENV production
+WORKDIR /usr/src/app
+COPY --chown=node:node . .
+RUN npm ci --only=production
+USER node
+CMD ["dumb-init", "node", "server.js"]
+
+   É bom saber: os comandos docker kill e docker stop apenas enviam sinais
+   para o processo de contêiner com PID 1. Se você estiver executando um
+   script de shell que executa seu aplicativo Node.js, observe que uma
+   instância de shell - como /bin/sh, por exemplo - não irá encaminhar
+   sinais para processos filho, o que significa que seu aplicativo nunca
+   receberá um SIGTERM.
+
+6. Como terminar de modo elegante seus aplicativos Node.js.
+
+   Se já estivermos discutindo os sinais do processo que encerram os
+   aplicativos, vamos nos certificar de que estamos fechando-os de maneira
+   adequada e normal, sem interromper os usuários.
+
+   Quando um aplicativo Node.js recebe um sinal de interrupção, também
+   conhecido como SIGINT, ou CTRL+C, ele causará uma interrupção abrupta
+   do processo, a menos que algum manipulador de eventos tenha sido
+   definido para tratá-lo com um comportamento diferente. Isso significa
+   que os clientes conectados a um aplicativo serão desconectados
+   imediatamente. Agora, imagine centenas de contêineres Node.js
+   orquestrados pelo Kubernetes, aumentando e diminuindo conforme a
+   necessidade surge para dimensionar ou gerenciar erros. Não é a melhor
+   experiência do usuário.
+
+   Você pode simular facilmente esse problema. Aqui está um exemplo de
+   aplicativo Fastify, com uma resposta inerente atrasada de 60 segundos
+   para um endpoint:
+fastify.get('/delayed', async (request, reply) => {
+ const SECONDS_DELAY = 60000
+ await new Promise(resolve => {
+     setTimeout(() => resolve(), SECONDS_DELAY)
+ })
+ return { hello: 'delayed world' }
+})
+
+const start = async () => {
+ try {
+   await fastify.listen(PORT, HOST)
+   console.log(`*^!@4=> Process id: ${process.pid}`)
+ } catch (err) {
+   fastify.log.error(err)
+   process.exit(1)
+ }
+}
+
+start()
+
+   Execute este aplicativo e, assim que estiver em execução, envie uma
+   solicitação HTTP simples para este endpoint:
+$ time curl [20]https://localhost:3000/delayed
+
+   Clique CTRL+C na janela do console do Node.js em execução e você verá
+   que a solicitação curl saiu abruptamente. Isso simula a mesma
+   experiência que seus usuários receberiam quando os contêineres fossem
+   destruídos.
+
+   Para fornecer uma experiência melhor, podemos fazer o seguinte:
+    1. Defina um manipulador de eventos para os vários sinais de
+       encerramento como SIGINT e SIGTERM.
+    2. O manipulador espera por operações de limpeza, como conexões de
+       banco de dados, solicitações HTTP em andamento e outras.
+    3. O manipulador então encerra o processo Node.js.
+
+   Especificamente com o Fastify, podemos fazer com que nosso manipulador
+   chame [21]fastify.close () que retorna uma promessa, e o Fastify também
+   terá o cuidado de responder a cada nova conexão com o código de status
+   HTTP 503 para sinalizar que o aplicativo está indisponível.
+
+   Vamos adicionar nosso manipulador de eventos:
+async function closeGracefully(signal) {
+   console.log(`*^!@4=> Received signal to terminate: ${signal}`)
+
+   await fastify.close()
+   // se você tiver uma conexão com banco de dados
+   // await db.close()
+   // você pode limpar outras coisas aqui
+   // await <qualquer-coisa>
+   process.exit()
+}
+process.on('SIGINT', closeGracefully)
+process.on('SIGTERM', closeGracefully)
+
+   Reconhecidamente, essa é uma preocupação mais genérica do aplicativo do
+   que relacionada ao Dockerfile, mas é ainda mais importante em ambientes
+   orquestrados.
+
+7. Encontre e corrija vulnerabilidades de segurança em sua imagem Docker
+Node.js
+
+   Lembra como discutimos a importância de pequenas imagens base do Docker
+   para nossos aplicativos Node.js. Vamos colocar esse teste em prática.
+
+   Vou usar a [22]CLI Snyk para testar nossa imagem Docker. Você pode se
+   inscrever para uma conta Snyk gratuita [23]aqui .
+$ npm install -g snyk
+$ snyk auth
+$ snyk container test node@sha256:b2da3316acdc2bec442190a1fe10dc094e7ba4121d029c
+b32075ff59bb27390a --file=Dockerfile
+
+   O primeiro comando instala o Snyk CLI, seguido por um fluxo de login
+   rápido da linha de comando para buscar uma chave de API, e então
+   podemos testar o contêiner para quaisquer problemas de segurança. Aqui
+   está o resultado:
+Organization:      snyk-demo-567
+Package manager:   apk
+Target file:       Dockerfile
+Project name:      docker-image|node
+Docker image: node@sha256:b2da3316acdc2bec442190a1fe10dc094e7ba4121d029cb32075ff
+59bb27390a
+Platform:          linux/amd64
+Base image:        node@sha256:b2da3316acdc2bec442190a1fe10dc094e7ba4121d029cb32
+075ff59bb27390a
+X Tested 16 dependencies for known issues, no vulnerable paths found.
+
+   Snyk detectou 16 dependências do sistema operacional, incluindo nosso
+   executável Node.js em tempo de execução, e não encontrou nenhuma versão
+   vulnerável.
+
+   Isso é ótimo, mas o que aconteceria se tivéssemos usado a diretiva FROM
+   node de imagem de base?
+   Melhor ainda, vamos supor que você usou uma imagem base do docker
+   Node.js mais específica, como esta:
+FROM node:14.2.0-slim
+
+   Esta parece uma posição melhor para se estar -- estamos sendo muito
+   específicos para uma versão do Node.js, bem como usando o tipo de
+   imagem slim, o que significa uma pegada de dependências menor na imagem
+   Docker. Vamos testar isso com Snyk:
+...X High severity vulnerability found in node
+  Description: Memory Corruption
+  Info: https://snyk.io/vuln/SNYK-UPSTREAM-NODE-570870
+  Introduced through: node@14.2.0
+  From: node@14.2.0
+  Introduced by your base image (node:14.2.0-slim)
+  Fixed in: 14.4.0X High severity vulnerability found in node
+  Description: Denial of Service (DoS)
+  Info: https://snyk.io/vuln/SNYK-UPSTREAM-NODE-674659
+  Introduced through: node@14.2.0
+  From: node@14.2.0
+  Introduced by your base image (node:14.2.0-slim)
+  Fixed in: 14.11.0
+Organization:      snyk-demo-567
+Package manager:   deb
+Target file:       Dockerfile
+Project name:      docker-image|node
+Docker image:      node:14.2.0-slim
+Platform:          linux/amd64
+Base image:        node:14.2.0-slimTested 78 dependencies for known issues, foun
+d 82 issues.Base Image        Vulnerabilities  Severity
+node:14.2.0-slim  82               23 high, 11 medium, 48 lowRecommendations for
+ base image upgrade:Minor upgrades
+Base Image         Vulnerabilities  Severity
+node:14.15.1-slim  71               17 high, 7 medium, 47 lowMajor upgrades
+Base Image        Vulnerabilities  Severity
+node:15.4.0-slim  71               17 high, 7 medium, 47 lowAlternative image ty
+pes
+Base Image                 Vulnerabilities  Severity
+node:14.15.1-buster-slim   55               12 high, 4 medium, 39 low
+node:14.15.3-stretch-slim  71               17 high, 7 medium, 47 low
+
+   Embora pareça que uma versão específica do tempo de execução do Node.js
+   FROM node:14.2.0-slim seja boa o suficiente, Snyk é capaz de encontrar
+   vulnerabilidades de segurança em 2 fontes primárias:
+    1. O próprio tempo de execução do Node.js -- você notou as duas
+       principais vulnerabilidades de segurança no relatório acima? Esses
+       são problemas de segurança conhecidos publicamente no tempo de
+       execução do Node.js. A correção imediata para isso seria atualizar
+       para uma versão mais recente do Node.js, sobre a qual Snyk informa
+       e também qual versão corrigiu -- 14.11.0, como você pode ver na
+       saída.
+    2. Ferramentas e bibliotecas instaladas nesta imagem base debian, como
+       glibc, bzip2, gcc, perl, bash, tar, libcrypt e outros. Embora essas
+       versões vulneráveis no contêiner possam não representar uma ameaça
+       imediata, por que tê-las se não as estamos usando?
+
+   A melhor parte deste relatório Snyk CLI? Snyk também recomenda outras
+   imagens de base para as quais mudar, então você não precisa descobrir
+   isso sozinho. Encontrar imagens alternativas pode consumir muito tempo,
+   então Snyk te ajuda nesse trabalho.
+
+   Minha recomendação nesta fase é a seguinte:
+    1. Se você estiver gerenciando suas imagens Docker em um registro,
+       como Docker Hub ou Artifactory, poderá [24]importá-las facilmente
+       para o Snyk para que a plataforma encontre essas vulnerabilidades
+       para você. Isso também lhe dará conselhos de recomendação na Snyk
+       UI, bem como monitorar suas imagens Docker em uma base contínua
+       para vulnerabilidades de segurança recém-descobertas.
+    2. Use o Snyk CLI em sua automação de CI. A CLI é muito flexível e é
+       exatamente por isso que a criamos -- para que você possa aplicá-la
+       a qualquer fluxo de trabalho personalizado que tiver. Também temos
+       [25]Snyk para ações do GitHub, se você gosta disso .
+
+8. Use compilações de vários estágios
+
+   Compilações em vários estágios são uma ótima maneira de passar de um
+   Dockerfile simples, mas potencialmente errôneo, para etapas separadas
+   de construção de uma imagem Docker, para que evitar o vazamento de
+   informações confidenciais. Não apenas isso, mas também podemos usar uma
+   imagem base maior do Docker para instalar nossas dependências, compilar
+   quaisquer pacotes npm nativos se necessário e, em seguida, copiar todos
+   esses artefatos em uma pequena imagem base de produção, como nosso
+   exemplo usando alpine.
+
+Impedir vazamento de informações confidenciais
+
+   O caso de uso aqui para evitar o vazamento de informações confidenciais
+   é mais comum do que você pensa.
+
+   Se você estiver criando imagens Docker para seu trabalho, há uma grande
+   chance de que você também mantenha pacotes npm privados. Se for esse o
+   caso, provavelmente você precisa encontrar uma maneira de
+   disponibilizar o segredo NPM_TOKEN para a instalação do npm.
+
+   Aqui está um exemplo do que estou falando:
+FROM node:lts-alpine@sha256:b2da3316acdc2bec442190a1fe10dc094e7ba4121d029cb32075
+ff59bb27390a
+RUN apk add dumb-init
+ENV NODE_ENV production
+ENV NPM_TOKEN 1234
+WORKDIR /usr/src/app
+COPY --chown=node:node . .
+#RUN npm ci --only=production
+RUN echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > .npmrc && \
+   npm ci --only=production
+USER node
+CMD ["dumb-init", "node", "server.js"]
+
+   Fazer isso, no entanto, deixa o arquivo .npmrc com o token npm secreto
+   dentro da imagem do Docker. Você pode tentar melhorá-lo excluindo-o
+   posteriormente, desta forma:
+RUN echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > .npmrc && \
+   npm ci --only=production
+RUN rm -rf .npmrc
+
+   O problema agora é que o próprio Dockerfile precisa ser tratado como um
+   ativo secreto, porque contém o token npm secreto dentro dele.
+
+   Felizmente, o Docker oferece uma maneira de passar argumentos para o
+   processo de compilação:
+ARG NPM_TOKEN
+RUN echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > .npmrc && \
+   npm ci --only=production && \
+   rm -rf .npmrc
+
+   E então nós o construímos da seguinte maneira:
+$ docker build . -t nodejs-tutorial --build-arg NPM_TOKEN=1234
+
+   Eu sei que você pode estar pensando que nós terminamos por aqui, mas,
+   desculpe decepcionar.
+
+   É assim com a segurança -- às vezes, as coisas óbvias são apenas mais
+   uma armadilha.
+
+   Qual é o problema agora, você pensa? Os argumentos de construção
+   passados dessa forma para o Docker são mantidos no log de histórico.
+   Vamos ver com nossos próprios olhos. Execute este comando:
+$ docker history nodejs-tutorial
+
+   que imprime o seguinte:
+IMAGE          CREATED              CREATED BY
+    SIZE      COMMENT
+b4c2c78acaba   About a minute ago   CMD ["dumb-init" "node" "server.js"]
+    0B        buildkit.dockerfile.v0
+<missing>      About a minute ago   USER node
+    0B        buildkit.dockerfile.v0
+<missing>      About a minute ago   RUN |1 NPM_TOKEN=1234 /bin/sh -c echo "//reg
+...   5.71MB    buildkit.dockerfile.v0
+<missing>      About a minute ago   ARG NPM_TOKEN
+    0B        buildkit.dockerfile.v0
+<missing>      About a minute ago   COPY . . # buildkit
+    15.3kB    buildkit.dockerfile.v0
+<missing>      About a minute ago   WORKDIR /usr/src/app
+    0B        buildkit.dockerfile.v0
+<missing>      About a minute ago   ENV NODE_ENV=production
+    0B        buildkit.dockerfile.v0
+<missing>      About a minute ago   RUN /bin/sh -c apk add dumb-init # buildkit
+    1.65MB    buildkit.dockerfile.v0
+
+   Você identificou o token NPM secreto ali? É o que eu quero dizer.
+
+   Há uma ótima maneira de gerenciar segredos para a imagem do contêiner,
+   mas é hora de introduzir compilações em vários estágios como uma
+   atenuação para esse problema, além de mostrar como podemos criar
+   imagens mínimas.
+
+Apresentando compilações de vários estágios para imagens Docker Node.js
+
+   Assim como aquele princípio no desenvolvimento de software de
+   Separation of Concerns, aplicaremos as mesmas ideias para construir
+   nossas imagens Docker do Node.js. Teremos uma imagem que usaremos para
+   construir tudo o que precisamos para o aplicativo Node.js ser
+   executado, o que em um mundo Node.js, significa instalar pacotes npm e
+   compilar módulos npm nativos, se necessário. Essa será nossa primeira
+   etapa.
+
+   A segunda imagem do Docker, representando o segundo estágio da
+   construção do Docker, será a imagem de produção do Docker. Este segundo
+   e último estágio é a imagem que realmente otimizamos e publicamos em um
+   registro, se houver. Essa primeira imagem, à qual nos referiremos como
+   imagem build, é descartada e deixada como uma imagem pendente no host
+   Docker que a construiu, até que seja limpa.
+
+   Aqui está a atualização de nosso Dockerfile que representa nosso
+   progresso até agora, mas separado em dois estágios:
+# --------------> The build image
+FROM node:latest AS build
+ARG NPM_TOKEN
+WORKDIR /usr/src/app
+COPY package-*.json /usr/src/app/
+RUN echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > .npmrc && \
+   npm ci --only=production && \
+   rm -f .npmrc
+
+# --------------> The production image
+FROM node:lts-alpine@sha256:b2da3316acdc2bec442190a1fe10dc094e7ba4121d029cb32075
+ff59bb27390a
+RUN apk add dumb-init
+ENV NODE_ENV production
+USER node
+WORKDIR /usr/src/app
+COPY --chown=node:node --from=build /usr/src/app/node_modules /usr/src/app/node_
+modules
+COPY --chown=node:node . /usr/src/app
+CMD ["dumb-init", "node", "server.js"]
+
+   Como você pode ver, escolhi uma imagem maior para o build porque posso
+   precisar de ferramentas como gcc (a GNU Compiler Collection) para
+   compilar pacotes npm nativos ou para outras necessidades.
+
+   No segundo estágio, há uma notação especial para a diretiva COPY que
+   copia a pasta node_modules/ da imagem do Docker de compilação para essa
+   nova imagem de base de produção.
+
+   Além disso, agora, você vê que o NPM_TOKEN foi passado como argumento
+   de construção para a imagem build intermediária do Docker? Não está
+   mais visível na saída do docker history nodejs-tutorial, porque isso
+   não existe em nossa imagem docker de produção.
+
+9. Manter arquivos desnecessários fora de suas imagens Docker do Node.js
+
+   Você tem um arquivo .gitignore para evitar poluir o repositório git com
+   arquivos desnecessários e arquivos potencialmente sensíveis também,
+   certo? O mesmo se aplica a imagens Docker.
+
+   O Docker tem um .dockerignore que irá garantir que ele ignore o envio
+   de qualquer padrão glob dentro dele para o daemon do Docker. Aqui está
+   uma lista de arquivos para dar uma ideia do que você pode colocar em
+   sua imagem do Docker e que gostaríamos de evitar:
+.dockerignore
+node_modules
+npm-debug.log
+Dockerfile
+.git
+.gitignore
+
+   Como você pode ver, node_modules/ é realmente muito importante ignorar,
+   porque se não o tivéssemos ignorado, a versão inicial do Dockerfile com
+   a qual começamos faria com que a pasta local node_modules/ fosse
+   copiada para o contêiner como está.
+FROM node@sha256:b2da3316acdc2bec442190a1fe10dc094e7ba4121d029cb32075ff59bb27390
+a
+WORKDIR /usr/src/app
+COPY . /usr/src/app
+RUN npm install
+CMD "npm" "start"
+
+   Na verdade, é ainda mais importante ter um arquivo .dockerignore quando
+   você está praticando compilações do Docker em vários estágios. Para
+   refrescar sua memória sobre a aparência do segundo estágio do Docker:
+# --------------> The production image
+FROM node:lts-alpine
+RUN apk add dumb-init
+ENV NODE_ENV production
+USER node
+WORKDIR /usr/src/app
+COPY --chown=node:node --from=build /usr/src/app/node_modules /usr/src/app/node_
+modules
+COPY --chown=node:node . /usr/src/app
+CMD ["dumb-init", "node", "server.js"]
+
+   A importância de ter um .dockerignore é que, quando fazemos um COPY .
+   /usr/src/app a partir do segundo estágio do Dockerfile, também estamos
+   copiando qualquer node_modules/ local para a imagem do Docker. Isso é
+   um grande não-não, pois podemos estar copiando o código-fonte
+   modificado dentro do node_modules/.
+
+   Além disso, como estamos usando o caractere curinga COPY ., acabamos
+   copiando arquivos sensíveis à imagem do Docker que incluem credenciais
+   ou configuração local.
+
+   A lição aqui para um arquivo .dockerignore é:
+     * Ignorar potencialmente cópias modificadas do node_modules/ na
+       imagem do Docker.
+     * Evitar a exposição de segredos, como credenciais .env ou aws.json
+       que chegam à imagem Docker do Node.js.
+     * Isso ajuda a acelerar as compilações do Docker porque ignora
+       arquivos que, de outra forma, teriam causado uma invalidação de
+       cache. Por exemplo, se um arquivo de log foi modificado, ou um
+       arquivo de configuração de ambiente local, tudo causaria a
+       invalidação do cache de imagem do Docker nessa camada de cópia no
+       diretório local.
+
+10. Montando "secrets" na imagem de "build" do Docker
+
+   Uma coisa a observar sobre o arquivo .dockerignore é que ele tem uma
+   abordagem tudo ou nada e não pode ser ativado ou desativado por
+   estágios de compilação em uma compilação de vários estágios do Docker.
+
+   Por que isso é importante? Idealmente, gostaríamos de usar o arquivo
+   .npmrc no estágio de build, pois podemos precisar dele para incluir um
+   token npm secreto para acessar pacotes npm privados. Talvez também
+   precise de um proxy específico ou configuração de registro de onde
+   extrair pacotes.
+
+   Isso significa que faz sentido ter o arquivo .npmrc disponível para o
+   estágio build - no entanto, não precisamos dele no segundo estágio,
+   para a imagem de produção, nem o queremos lá, pois pode incluir
+   informações confidenciais, como o token segredo do npm.
+
+   Uma maneira de diminuir o risco do .dockerignore é montar um sistema de
+   arquivos local que estará disponível para o estágio de build, mas há
+   uma maneira melhor.
+
+   O Docker oferece suporte a um recurso relativamente novo conhecido como
+   "Docker Secrets", e é um ajuste natural para o caso que precisamos do
+   .npmrc. É assim que funciona:
+     * Quando executamos o comando docker build, especificaremos os
+       argumentos da linha de comando que definem um novo ID secreto e
+       fazem referência a um arquivo como a fonte do segredo.
+     * No Dockerfile, adicionaremos sinalizadores à diretiva RUN para
+       instalar o npm em produção, que carrega o arquivo referido pelo ID
+       secreto no local de destino - o arquivo .npmrc do diretório local
+       onde queremos que esteja disponível.
+     * O arquivo .npmrc é montado como um segredo e nunca é copiado para a
+       imagem Docker.
+     * Por último, não vamos esquecer de adicionar o arquivo .npmrc a
+       lista do .dockerignore para que ele não entre na imagem de forma
+       alguma, para as imagens de build ou produção.
+
+   Vamos ver como tudo isso funciona junto. Primeiro, o .dockerignore
+   atualizado :
+.dockerignore
+node_modules
+npm-debug.log
+Dockerfile
+.git
+.gitignore
+.npmrc
+
+   Em seguida, o Dockerfile completo, com a diretiva RUN atualizada para
+   instalar pacotes npm enquanto especifica o .npmrc no ponto de montagem:
+# --------------> The build image
+FROM node:latest AS build
+WORKDIR /usr/src/app
+COPY package-*.json /usr/src/app/
+RUN --mount=type=secret,id=npmrc,target=/usr/src/app/.npmrc npm ci --only=produc
+tion
+
+# --------------> The production image
+FROM node:lts-alpine
+RUN apk add dumb-init
+ENV NODE_ENV production
+USER node
+WORKDIR /usr/src/app
+COPY --chown=node:node --from=build /usr/src/app/node_modules /usr/src/app/node_
+modules
+COPY --chown=node:node . /usr/src/app
+CMD ["dumb-init", "node", "server.js"]
+
+   E, finalmente, o comando que cria a imagem Docker Node.js:
+$ docker build . -t nodejs-tutorial --secret id=npmrc,src=.npmrc
+
+Resumo
+
+   Você fez tudo para criar uma imagem base do Docker Node.js otimizada.
+   Bom trabalho!
+
+   Essa última etapa encerra todo este guia sobre a criação de contêineres
+   de aplicativos Docker Node.js, levando em consideração o desempenho e
+   as otimizações relacionadas à segurança para garantir que estamos
+   construindo imagens Docker Node.js de nível de produção!
+
+   Recursos que eu recomendo fortemente que você analisar:
+     * [26]10 Docker image security best practices
+     * [27]Docker for Java Developers: 5 things you need to know not to
+       fail your security
+
+   [28]Clique aqui para ver o cheatsheet.
+
+Créditos
+
+     * [29]10 best practices to containerize Node.js web applications with
+       Docker, escrito originalmente por [30]Liran Tal and [31]Yoni
+       Goldberg.
+
+   Nodejs
+   Web Development
+   JavaScript
+   Docker
+   Containers
+
+   --
+
+   --
+   (BUTTON)
+   (BUTTON)
+   Eduardo Rabelo
+   (BUTTON) Follow
+   [32](BUTTON)
+   [33]
+
+Written by Eduardo Rabelo
+
+   [34]3.4K Followers
+
+   Joe³¿ - [35]https://eduardorabelo.me
+   (BUTTON) Follow
+   [36](BUTTON)
+   [37]
+
+   Help
+   [38]
+
+   Status
+   [39]
+
+   About
+   [40]
+
+   Careers
+   [41]
+
+   Blog
+   [42]
+
+   Privacy
+   [43]
+
+   Terms
+   [44]
+
+   Text to speech
+   [45]
+
+   Teams
+
+References
+
+   Visible links:
+   1. file:///osd.xml
+   2. android-app://com.medium.reader/https/medium.com/p/b52a3e27ba3c
+   3. https://rsci.app.link/?%24canonical_url=https%3A%2F%2Fmedium.com%2Fp%2Fb52a3e27ba3c&%7Efeature=LoOpenInAppButton&%7Echannel=ShowPostUnderUser&source=---two_column_layout_nav----------------------------------
+   4. https://medium.com/m/signin?operation=login&redirect=https%3A%2F%2Foieduardorabelo.medium.com%2F10-melhores-pr%C3%A1ticas-para-aplica%C3%A7%C3%B5es-node-js-em-containers-com-docker-b52a3e27ba3c&source=post_page---two_column_layout_nav-----------------------global_nav-----------
+   5. https://medium.com/m/signin?operation=login&redirect=https%3A%2F%2Foieduardorabelo.medium.com%2F10-melhores-pr%C3%A1ticas-para-aplica%C3%A7%C3%B5es-node-js-em-containers-com-docker-b52a3e27ba3c&source=post_page---two_column_layout_nav-----------------------global_nav-----------
+   6. file:///?source=post_page-----b52a3e27ba3c--------------------------------
+   7. https://medium.com/m/signin?actionUrl=https%3A%2F%2Fmedium.com%2F_%2Fsubscribe%2Fuser%2Ffeb605976cbf&operation=register&redirect=https%3A%2F%2Foieduardorabelo.medium.com%2F10-melhores-pr%C3%A1ticas-para-aplica%C3%A7%C3%B5es-node-js-em-containers-com-docker-b52a3e27ba3c&user=Eduardo+Rabelo&userId=feb605976cbf&source=post_page-feb605976cbf----b52a3e27ba3c---------------------post_header-----------
+   8. https://snyk.io/wp-content/uploads/cheatsheet-2048x1442.jpg
+   9. https://github.com/snyk-labs/nodejs-docker-best-practices
+  10. https://hub.docker.com/layers/node/library/node/lts-alpine/images/sha256-51e341881c2b77e52778921c685e711a186a71b8c6f62ff2edfc6b6950225a2f?context=explore
+  11. https://snyk.io/blog/ten-npm-security-best-practices/
+  12. https://expressjs.com/en/advanced/best-practice-performance.html#set-node_env-to-production
+  13. https://www.dynatrace.com/news/blog/the-drastic-effects-of-omitting-node-env-in-your-express-js-applications/
+  14. https://snyk.io/blog/command-injection/
+  15. https://snyk.io/blog/snyking-in-directory-traversal-vulnerability-exploit-in-the-st-package/
+  16. https://snyk.io/blog/a-serious-security-flaw-in-runc-can-result-in-root-privilege-escalation-in-docker-and-kubernetes/
+  17. https://snyk.io/blog/kernel-privilege-escalation/
+  18. https://github.com/nodejs/docker-node/blob/master/docs/BestPractices.md#handling-kernel-signals
+  19. https://engineeringblog.yelp.com/2016/01/dumb-init-an-init-for-docker.html
+  20. https://localhost:3000/delayed
+  21. https://www.fastify.io/docs/latest/Server/
+  22. https://support.snyk.io/hc/en-us/articles/360003812458-Getting-started-with-the-CLI
+  23. https://app.snyk.io/login
+  24. https://support.snyk.io/hc/en-us/articles/360003916058-Configure-integration-for-Docker-Hub
+  25. https://snyk.io/blog/see-snyk-and-github-in-action-at-github-universe/
+  26. https://snyk.io/blog/10-docker-image-security-best-practices/
+  27. https://snyk.io/blog/docker-for-java-developers/
+  28. https://snyk.io/wp-content/uploads/cheatsheet-2048x1442.jpg
+  29. https://snyk.io/blog/10-best-practices-to-containerize-nodejs-web-applications-with-docker/
+  30. https://twitter.com/liran_tal
+  31. https://goldbergyoni.com/
+  32. https://medium.com/m/signin?actionUrl=%2F_%2Fapi%2Fsubscriptions%2Fnewsletters%2Fad82031c2fc7&operation=register&redirect=https%3A%2F%2Foieduardorabelo.medium.com%2F10-melhores-pr%C3%A1ticas-para-aplica%C3%A7%C3%B5es-node-js-em-containers-com-docker-b52a3e27ba3c&newsletterV3=feb605976cbf&newsletterV3Id=ad82031c2fc7&user=Eduardo+Rabelo&userId=feb605976cbf&source=-----b52a3e27ba3c---------------------subscribe_user-----------
+  33. file:///?source=post_page-----b52a3e27ba3c--------------------------------
+  34. file:///followers?source=post_page-----b52a3e27ba3c--------------------------------
+  35. https://eduardorabelo.me/
+  36. https://medium.com/m/signin?actionUrl=%2F_%2Fapi%2Fsubscriptions%2Fnewsletters%2Fad82031c2fc7&operation=register&redirect=https%3A%2F%2Foieduardorabelo.medium.com%2F10-melhores-pr%C3%A1ticas-para-aplica%C3%A7%C3%B5es-node-js-em-containers-com-docker-b52a3e27ba3c&newsletterV3=feb605976cbf&newsletterV3Id=ad82031c2fc7&user=Eduardo+Rabelo&userId=feb605976cbf&source=-----b52a3e27ba3c---------------------subscribe_user-----------
+  37. https://help.medium.com/hc/en-us?source=post_page-----b52a3e27ba3c--------------------------------
+  38. https://medium.statuspage.io/?source=post_page-----b52a3e27ba3c--------------------------------
+  39. https://medium.com/about?autoplay=1&source=post_page-----b52a3e27ba3c--------------------------------
+  40. https://medium.com/jobs-at-medium/work-at-medium-959d1a85284e?source=post_page-----b52a3e27ba3c--------------------------------
+  41. https://blog.medium.com/?source=post_page-----b52a3e27ba3c--------------------------------
+  42. https://policy.medium.com/medium-privacy-policy-f03bf92035c9?source=post_page-----b52a3e27ba3c--------------------------------
+  43. https://policy.medium.com/medium-terms-of-service-9db0094a1e0f?source=post_page-----b52a3e27ba3c--------------------------------
+  44. https://speechify.com/medium?source=post_page-----b52a3e27ba3c--------------------------------
+  45. https://medium.com/business?source=post_page-----b52a3e27ba3c--------------------------------
+
+   Hidden links:
+  47. https://medium.com/?source=---two_column_layout_nav----------------------------------
+  48. https://medium.com/m/signin?operation=register&redirect=https%3A%2F%2Fmedium.com%2Fnew-story&source=---two_column_layout_nav-----------------------new_post_topnav-----------
+  49. https://medium.com/search?source=---two_column_layout_nav----------------------------------
+  50. file://localhost/?source=post_page-----b52a3e27ba3c--------------------------------
+  51. https://medium.com/m/signin?actionUrl=https%3A%2F%2Fmedium.com%2F_%2Fvote%2Fp%2Fb52a3e27ba3c&operation=register&redirect=https%3A%2F%2Foieduardorabelo.medium.com%2F10-melhores-pr%25C3%25A1ticas-para-aplica%25C3%25A7%25C3%25B5es-node-js-em-containers-com-docker-b52a3e27ba3c&user=Eduardo+Rabelo&userId=feb605976cbf&source=-----b52a3e27ba3c---------------------clap_footer-----------
+  52. https://medium.com/m/signin?actionUrl=https%3A%2F%2Fmedium.com%2F_%2Fbookmark%2Fp%2Fb52a3e27ba3c&operation=register&redirect=https%3A%2F%2Foieduardorabelo.medium.com%2F10-melhores-pr%25C3%25A1ticas-para-aplica%25C3%25A7%25C3%25B5es-node-js-em-containers-com-docker-b52a3e27ba3c&source=-----b52a3e27ba3c---------------------bookmark_footer-----------
+  53. https://medium.com/tag/nodejs?source=post_page-----b52a3e27ba3c---------------nodejs-----------------
+  54. https://medium.com/tag/web-development?source=post_page-----b52a3e27ba3c---------------web_development-----------------
+  55. https://medium.com/tag/javascript?source=post_page-----b52a3e27ba3c---------------javascript-----------------
+  56. https://medium.com/tag/docker?source=post_page-----b52a3e27ba3c---------------docker-----------------
+  57. https://medium.com/tag/containers?source=post_page-----b52a3e27ba3c---------------containers-----------------
+  58. https://medium.com/m/signin?actionUrl=https%3A%2F%2Fmedium.com%2F_%2Fvote%2Fp%2Fb52a3e27ba3c&operation=register&redirect=https%3A%2F%2Foieduardorabelo.medium.com%2F10-melhores-pr%25C3%25A1ticas-para-aplica%25C3%25A7%25C3%25B5es-node-js-em-containers-com-docker-b52a3e27ba3c&user=Eduardo+Rabelo&userId=feb605976cbf&source=-----b52a3e27ba3c---------------------clap_footer-----------
+  59. https://medium.com/m/signin?actionUrl=https%3A%2F%2Fmedium.com%2F_%2Fvote%2Fp%2Fb52a3e27ba3c&operation=register&redirect=https%3A%2F%2Foieduardorabelo.medium.com%2F10-melhores-pr%25C3%25A1ticas-para-aplica%25C3%25A7%25C3%25B5es-node-js-em-containers-com-docker-b52a3e27ba3c&user=Eduardo+Rabelo&userId=feb605976cbf&source=-----b52a3e27ba3c---------------------clap_footer-----------
+  60. https://medium.com/m/signin?actionUrl=https%3A%2F%2Fmedium.com%2F_%2Fbookmark%2Fp%2Fb52a3e27ba3c&operation=register&redirect=https%3A%2F%2Foieduardorabelo.medium.com%2F10-melhores-pr%25C3%25A1ticas-para-aplica%25C3%25A7%25C3%25B5es-node-js-em-containers-com-docker-b52a3e27ba3c&source=--------------------------bookmark_footer-----------
+  61. file://localhost/?source=post_page-----b52a3e27ba3c--------------------------------
